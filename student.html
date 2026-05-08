@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>우리반 성장 기록장 (학생용)</title>
+    <style>
+        /* 선생님의 예쁜 디자인 아이덴티티를 그대로 유지합니다 */
+        body { font-family: 'Malgun Gothic', sans-serif; background: #f0f7ff; margin: 0; padding: 10px; display: flex; justify-content: center; }
+        .app-container { width: 100%; max-width: 500px; background: #ffffff; border-radius: 20px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05); padding: 20px; min-height: 90vh; }
+        .section { display: none; }
+        .active { display: block; }
+        .btn-blue { width: 100%; padding: 12px; background: #00b894; color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; }
+        .input-field { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #dfe6e9; border-radius: 8px; box-sizing: border-box; }
+        
+        /* 메뉴 그리드 */
+        .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        .menu-item { background: #f9f9f9; padding: 20px 10px; border-radius: 20px; text-align: center; border: 2px solid #f1f2f6; }
+        .menu-label { font-weight: bold; font-size: 14px; margin-top: 10px; color: #2d3436; }
+        
+        /* 목록 및 스티커판 */
+        .scroll-list { max-height: 500px; overflow-y: auto; border: 1px solid #f1f2f6; padding: 10px; border-radius: 10px; background: #fff; }
+        .record-row { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid #f1f2f6; }
+        .sticker-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-top: 10px; }
+        .sticker-cell { aspect-ratio: 1; border: 1px solid #dfe6e9; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #dfe6e9; background: #fff; }
+        .sticker-cell.on { background-color: #ffeaa7; border-color: #fdcb6e; color: transparent; }
+        .sticker-cell.on::after { content: '⭐'; font-size: 16px; }
+        
+        /* 학급 목표 바 */
+        .class-goal-bar { display: flex; border: 2px solid #ddd; border-radius: 10px; overflow: hidden; height: 35px; margin: 15px 0; background: #eee; }
+        .goal-cell { flex: 1; border-right: 1px solid #ccc; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999; }
+        .goal-cell.filled { background-color: #f1c40f; color: white; font-weight: bold; }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+<div class="app-container">
+    <div style="text-align: center; margin-bottom: 20px;">
+        <h1 style="color: #2d3436; font-size: 22px;">🌱 우리반 성장 기록장</h1>
+        <p style="color: #636e72; font-size: 13px;">친구들의 멋진 기록을 함께 확인해요!</p>
+    </div>
+
+    <div id="sec-login" class="section active">
+        <input type="text" id="c-name" class="input-field" placeholder="학급 이름을 입력하세요 (예: 조준호)">
+        <button class="btn-blue" onclick="handleStudentLogin()">기록 보러 가기</button>
+    </div>
+
+    <div id="sec-main" class="section">
+        <div style="background: #e1f5fe; padding: 15px; border-radius: 15px; margin-bottom: 20px; text-align: center;">
+            <span id="welcome-msg" style="font-weight: bold; color: #0288d1;"></span>
+        </div>
+        
+        <div class="menu-grid">
+            <div class="menu-item" onclick="showSubPage('칭찬 스티커')">
+                <img src="images/sticker.png" style="width: 60px; height: 60px; object-fit: contain;">
+                <div class="menu-label">칭찬 스티커</div>
+            </div>
+            <div class="menu-item" onclick="showSubPage('독서 기록')">
+                <img src="images/book.png" style="width: 60px; height: 60px; object-fit: contain;">
+                <div class="menu-label">독서 기록</div>
+            </div>
+            <div class="menu-item" onclick="showSubPage('일기 기록')">
+                <img src="images/diary.png" style="width: 60px; height: 60px; object-fit: contain;">
+                <div class="menu-label">일기 기록</div>
+            </div>
+            <div class="menu-item" onclick="showSubPage('우리반 스티커')">
+                <img src="images/trophy.png" style="width: 60px; height: 60px; object-fit: contain;">
+                <div class="menu-label">우리반 목표</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="sec-sub" class="section">
+        <button onclick="changeSection('sec-main')" style="background:none; border:none; color:#0984e3; cursor:pointer; margin-bottom:10px;">← 메인으로</button>
+        <h3 id="sub-title" style="text-align: center; color: #2d3436;">메뉴 이름</h3>
+        <div id="display-area" class="scroll-list"></div>
+    </div>
+</div>
+
+<script>
+    // 선생님의 파이어베이스 설정과 동일하게 맞춰주세요!
+    const firebaseConfig = {
+        apiKey: "AIzaSyBKVYFPnLoBZ9bKjjE1SfJXBQKiV4fssj4",
+        authDomain: "smart-class2-record.firebaseapp.com",
+        projectId: "smart-class2-record",
+        storageBucket: "smart-class2-record.firebasestorage.app",
+        messagingSenderId: "479464373449",
+        appId: "1:479464373449:web:790a0def84c615f4396118"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const fs = firebase.firestore();
+    let currentClassName = "";
+    let currentRoster = [];
+    let classData = {};
+
+    async function handleStudentLogin() {
+        const className = document.getElementById('c-name').value.trim();
+        if(!className) return alert("학급 이름을 입력해주세요.");
+
+        const docRef = fs.collection("classes").doc(className);
+        const docSnap = await docRef.get();
+
+        if (docSnap.exists) {
+            classData = docSnap.data();
+            currentClassName = className;
+            currentRoster = classData.roster;
+            document.getElementById('welcome-msg').innerText = `✨ ${className} 반 친구들 환영해요!`;
+            changeSection('sec-main');
+        } else {
+            alert("찾으시는 학급 정보가 없습니다. 이름을 확인해주세요.");
+        }
+    }
+
+    function showSubPage(title) {
+        document.getElementById('sub-title').innerText = title;
+        const area = document.getElementById('display-area');
+        area.innerHTML = "";
+
+        if (title === '우리반 스티커') {
+            renderClassGoal(area);
+        } else {
+            currentRoster.forEach((std) => {
+                let summary = "";
+                let detailHtml = "";
+
+                if(title === '칭찬 스티커') {
+                    const count = std.stickers.filter(s => s).length;
+                    summary = `⭐ ${count}개`;
+                    detailHtml = `<div class="sticker-grid">` + 
+                        std.stickers.map((on, i) => `<div class="sticker-cell ${on?'on':''}">${i+1}</div>`).join('') + 
+                        `</div>`;
+                } else if(title === '독서 기록') {
+                    summary = `📖 ${std.readingCount}권`;
+                } else if(title === '일기 기록') {
+                    summary = `📅 ${std.diaryDates.length}회`;
+                    detailHtml = `<div style="font-size:11px; color:#636e72; margin-top:5px;">최근 기록: ${std.diaryDates.slice(-3).join(', ') || '없음'}</div>`;
+                }
+
+                area.innerHTML += `
+                    <div style="padding:15px; border-bottom:1px solid #f1f2f6;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-weight:bold;">${std.num}. ${std.name}</span>
+                            <span style="color:#e67e22; font-weight:bold;">${summary}</span>
+                        </div>
+                        ${detailHtml}
+                    </div>`;
+            });
+        }
+        changeSection('sec-sub');
+    }
+
+    function renderClassGoal(container) {
+        const score = classData.classStickers || 0;
+        container.innerHTML = `
+            <div style="background:#fffbe6; padding:15px; border-radius:10px; border:1px solid #ffe58f; margin-bottom:15px; text-align:center;">
+                <div style="font-weight:bold; color:#d48806; margin-bottom:5px;">🏆 우리반 공동 목표</div>
+                <div style="font-size:14px; color:#856404;">${classData.rewardText || "선생님이 보상을 등록 중입니다."}</div>
+            </div>
+            <div class="class-goal-bar">` +
+                Array.from({length: 30}, (_, i) => `<div class="goal-cell ${i < score ? 'filled' : ''}">${(i+1)%5==0?i+1:''}</div>`).join('') +
+            `</div>
+            <h2 style="text-align:center; color:#f1c40f;">현재 ${score} / 30 점</h2>
+            <p style="text-align:center; font-size:12px; color:#999;">친구들과 힘을 모아 목표를 달성해봐요!</p>`;
+    }
+
+    function changeSection(id) {
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        window.scrollTo(0, 0);
+    }
+</script>
+</body>
+</html>
